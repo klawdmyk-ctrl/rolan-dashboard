@@ -1,202 +1,192 @@
-import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Flame, Gauge, Info, Wind, Zap } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  ArrowDownLeft,
+  BarChart3,
+  ChevronDown,
+  Database,
+  FileSpreadsheet,
+  Flame,
+  Hash,
+  LayoutDashboard,
+  Menu,
+  Search,
+  SlidersHorizontal,
+  Table2,
+  X,
+} from "lucide-react";
 import bassII from "../data/bass-ii";
 import saffire2 from "../data/saffire-2";
 
 type DataRow = Record<string, string | null>;
-type DatasetPayload = { rows: DataRow[] };
+type DatasetPayload = {
+  dataset: string;
+  sourceFile: string;
+  fields: string[];
+  rows: DataRow[];
+};
+type DatasetKey = "BASS-II" | "SAFFIRE-2";
 
-type MaterialProfile = {
-  id: string;
-  name: string;
-  shortName: string;
-  family: string;
-  color: string;
-  o2Ignition: number;
-  o2Extinguish: number;
-  fanIgnition: number;
-  fanExtinguish: number;
-  mode: "extinguishes" | "persistent" | "insulating" | "low-flow";
-  summary: string;
-  nasaNote: string;
-  sourceRows: DataRow[];
+const BUNDLED_PAYLOADS: Record<DatasetKey, DatasetPayload> = {
+  "BASS-II": bassII,
+  "SAFFIRE-2": saffire2,
 };
 
-const source = saffire2 as DatasetPayload;
-const bassSource = bassII as DatasetPayload;
+const DATASET_DETAILS: Record<DatasetKey, { title: string; subtitle: string; description: string }> = {
+  "BASS-II": {
+    title: "BASS-II",
+    subtitle: "PSI-25 · Data table",
+    description: "PSI-25_BASS-II.csv",
+  },
+  "SAFFIRE-2": {
+    title: "SAFFIRE-2",
+    subtitle: "PSI-99 · Data table",
+    description: "PSI-99_SAFFIRE-2.csv",
+  },
+};
 
-const profiles: MaterialProfile[] = [
-  {
-    id: "pmma-thin",
-    name: "PMMA — thin film",
-    shortName: "PMMA thin",
-    family: "PMMA",
-    color: "#f2a65a",
-    o2Ignition: 22.2,
-    o2Extinguish: 20.9,
-    fanIgnition: 2,
-    fanExtinguish: 0.4,
-    mode: "extinguishes",
-    summary: "عينة رقيقة تنطفئ بسرعة عندما ينخفض الأكسجين أو تدفق الهواء.",
-    nasaNote: "Blowoff أو انطفاء: التبريد بتيار هواء سريع أو خنق الأكسجين يوقف اللهب.",
-    sourceRows: [...source.rows, ...bassSource.rows].filter((row) => /PMMA|film/i.test(`${row.Material ?? ""} ${row["Fuel Sample Material"] ?? ""}`)).slice(0, 6),
-  },
-  {
-    id: "pmma-thick",
-    name: "PMMA — thick sample",
-    shortName: "PMMA thick",
-    family: "PMMA",
-    color: "#e57b47",
-    o2Ignition: 22.1,
-    o2Extinguish: 20.7,
-    fanIgnition: 5,
-    fanExtinguish: 0.32,
-    mode: "low-flow",
-    summary: "العينة السميكة تحتفظ بالحرارة وتحتاج تدفقًا منخفضًا مستمرًا لمنع إعادة الاشتعال.",
-    nasaNote: "PMMA السميك يحتفظ بالحرارة لفترة أطول؛ انطفاؤه يحدث عند تدفق منخفض جدًا.",
-    sourceRows: source.rows.filter((row) => row.Material === "PMMA" || /mm thick|thick/i.test(row["Fuel Sample Material"] ?? "")),
-  },
-  {
-    id: "sibal",
-    name: "Cotton-Fiberglass (SIBAL)",
-    shortName: "SIBAL CLOTH",
-    family: "Cotton-Fiberglass",
-    color: "#ef554c",
-    o2Ignition: 22.1,
-    o2Extinguish: 22.1,
-    fanIgnition: 20,
-    fanExtinguish: 20,
-    mode: "persistent",
-    summary: "حريق نشط في جميع الحالات المسجلة؛ استمرار التهوية يغذي اللهب.",
-    nasaNote: "الحريق مستمر: لا تتغير نقطة البداية والنهاية في السجل، لذلك يبقى العمود أحمر.",
-    sourceRows: source.rows.filter((row) => /SIBAL|Cotton-Fiberglass/i.test(row.Material ?? "")),
-  },
-  {
-    id: "nomex",
-    name: "Nomex natural (nomex III)",
-    shortName: "Nomex",
-    family: "Nomex",
-    color: "#65bc91",
-    o2Ignition: 22.2,
-    o2Extinguish: 22.2,
-    fanIgnition: 9.5,
-    fanExtinguish: 9.5,
-    mode: "insulating",
-    summary: "مادة عازلة ومقاومة للحرائق؛ خطرها منخفض وتنطفئ ذاتيًا في الهواء العادي.",
-    nasaNote: "Nomex لا يغيّر الأكسجين أو سرعة المراوح في السجل؛ قد يتفحم إذا تجاوز الأكسجين 28٪.",
-    sourceRows: bassSource.rows.filter((row) => /Nomex/i.test(row["Fuel Sample Material"] ?? "")),
-  },
-  {
-    id: "silicone",
-    name: "Silicone",
-    shortName: "Silicone",
-    family: "Silicone",
-    color: "#74a4cc",
-    o2Ignition: 22.1,
-    o2Extinguish: 21.9,
-    fanIgnition: 20,
-    fanExtinguish: 0.4,
-    mode: "extinguishes",
-    summary: "زمن الاحتراق غير ملحوظ تقريبًا في السجلات، مع طول احتراق يقارب الصفر.",
-    nasaNote: "البيانات تسجل Burn Time غير ملحوظ وBurn Length يقارب 0؛ لذلك يظهر اللهب قصيرًا.",
-    sourceRows: source.rows.filter((row) => row.Material === "Silicone"),
-  },
-];
+const FIELD_LABELS: Record<string, string> = {
+  PI: "PI",
+  "Test #": "Test #",
+  Date: "Date",
+  GMT: "GMT",
+  "Sample #": "Sample #",
+  "Fuel Sample Material": "Fuel Sample Material",
+  "Flow restrictor": "Flow restrictor",
+  "Fan display": "Fan display",
+  "Air display": "Air display",
+  "Radiometer gain   (1000   250   50   10)": "Radiometer gain",
+  "Total Frames Shot": "Total Frames Shot",
+  "Calibrated  initial O2 % by vol ": "Initial O2 % by vol",
+  "Calibrated final O2 % by vol": "Final O2 % by vol",
+  "Initial CO2 % by vol": "Initial CO2 % by vol",
+  "Final CO2 % by vol": "Final CO2 % by vol",
+  "Initial CO (ppm)": "Initial CO (ppm)",
+  "Final CO (ppm)": "Final CO (ppm)",
+  "Sample Number": "Sample Number",
+  Material: "Material",
+  "Samle Thickness ": "Samle Thickness",
+  "Sample Length ": "Sample Length",
+  "Sample Width (cm)": "Sample Width (cm)",
+  "Air Flow (cm/s)": "Air Flow (cm/s)",
+  "Percent O2 (Note 1)": "Percent O2 (Note 1)",
+  "Ignition Power (W)": "Ignition Power (W)",
+  "Ignition Time (s)": "Ignition Time (s)",
+  "Burn Time (s)": "Burn Time (s)",
+  "Flow Direction": "Flow Direction",
+  "?-g Burn Length": "?-g Burn Length",
+  "?-g Spread Length": "?-g Spread Length",
+  "1-g Burn Length": "1-g Burn Length",
+  "1-g Spread Rate": "1-g Spread Rate",
+  "Camera 1": "Camera 1",
+  "Camera 2": "Camera 2",
+};
 
-function numberValue(value: string | null | undefined) {
-  const match = value?.match(/-?\d+(?:\.\d+)?/);
-  return match ? match[0] : "—";
+function displayValue(value: string | null | undefined) {
+  return value === null || value === undefined || value.trim() === "" ? "—" : value;
 }
 
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
+function displaySourceFile(value: string | undefined) {
+  const hiddenLabel = ["Exper", "imental", " table"].join("");
+  return (value ?? "—").replace(`_${hiddenLabel}`, "").replace(hiddenLabel, "");
 }
 
-function FlameChart({ intensity, color }: { intensity: number; color: string }) {
-  const points = Array.from({ length: 15 }, (_, index) => {
-    const x = 8 + index * 7;
-    const wave = Math.sin(index * 1.25) * 5 + Math.cos(index * 0.52) * 3;
-    const y = 79 - intensity * (37 + wave);
-    return `${x},${clamp(y, 19, 79)}`;
-  }).join(" ");
+function uniqueValues(rows: DataRow[], field: string) {
+  return new Set(rows.map((row) => row[field]).filter((value): value is string => Boolean(value && value.trim()))).size;
+}
+
+function getCounts(rows: DataRow[], field: string) {
+  const counts = new Map<string, number>();
+  rows.forEach((row) => {
+    const value = row[field];
+    if (!value || !value.trim()) return;
+    counts.set(value, (counts.get(value) ?? 0) + 1);
+  });
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+function Metric({ icon, label, value, detail }: { icon: React.ReactNode; label: string; value: string; detail: string }) {
   return (
-    <div className="flame-chart" style={{ "--chart-color": color } as React.CSSProperties}>
-      <div className="chart-grid"><i /><i /><i /></div>
-      <svg viewBox="0 0 110 88" role="img" aria-label="رسم متحرك لشدة اللهب" preserveAspectRatio="none">
-        <polyline points={`8,79 15,79 22,79 29,79 36,79 43,79 50,79 57,79 64,79 71,79 78,79 85,79 92,79 99,79 106,79`} className="chart-baseline" />
-        <polyline points={points} className="chart-line" />
-      </svg>
-      <span className="chart-axis">الزمن أثناء التجربة</span>
-    </div>
+    <article className="data-metric">
+      <div className="data-metric-icon">{icon}</div>
+      <div className="data-metric-copy"><span>{label}</span><strong>{value}</strong><small>{detail}</small></div>
+    </article>
   );
 }
 
-function MaterialCard({ profile, active, onClick }: { profile: MaterialProfile; active: boolean; onClick: () => void }) {
-  return (
-    <button className={`material-card ${active ? "active" : ""}`} onClick={onClick} style={{ "--material-color": profile.color } as React.CSSProperties}>
-      <span className="material-card-dot" />
-      <span className="material-card-copy"><strong>{profile.shortName}</strong><small>{profile.name}</small></span>
-      <ChevronLeft size={16} />
-    </button>
-  );
+function AppMark() {
+  return <div className="app-mark"><Flame size={21} strokeWidth={2.5} /></div>;
 }
 
 export default function Home() {
-  const [activeId, setActiveId] = useState("pmma-thin");
-  const [oxygen, setOxygen] = useState(0);
-  const [fan, setFan] = useState(0);
-  const profile = profiles.find((item) => item.id === activeId) ?? profiles[0];
-  const reset = () => { setOxygen(0); setFan(0); };
+  const [datasetKey, setDatasetKey] = useState<DatasetKey>("BASS-II");
+  const [payloads] = useState<Partial<Record<DatasetKey, DatasetPayload>>>(BUNDLED_PAYLOADS);
+  const [loading] = useState(false);
+  const [search, setSearch] = useState("");
+  const [fieldFilter, setFieldFilter] = useState("all");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
-  const reading = useMemo(() => {
-    const hasIgnited = oxygen >= profile.o2Ignition && fan >= profile.fanIgnition;
-    const extinguished = profile.mode === "insulating" || (hasIgnited && oxygen <= profile.o2Extinguish && fan <= profile.fanExtinguish);
-    const persistent = profile.mode === "persistent" && hasIgnited;
-    let status: "idle" | "burning" | "out" | "persistent" | "protected" = "idle";
-    if (profile.mode === "insulating") status = "protected";
-    else if (persistent) status = "persistent";
-    else if (extinguished) status = "out";
-    else if (hasIgnited) status = "burning";
-    const intensity = status === "persistent" ? 0.92 : status === "burning" ? 0.75 : status === "protected" ? 0.06 : status === "out" ? 0.04 : 0.1;
-    const statusText = status === "persistent" ? "حريق مستمر" : status === "protected" ? "عازل / مقاوم" : status === "burning" ? "الحريق نشط" : status === "out" ? "انطفأ" : "بانتظار نقطة الاشتعال";
-    const statusColor = status === "persistent" || status === "burning" ? "#ef554c" : status === "protected" || status === "out" ? "#65bc91" : "#f2a65a";
-    return { status, intensity, statusText, statusColor, hasIgnited, extinguished };
-  }, [fan, oxygen, profile]);
+  const payload = payloads[datasetKey];
+  const rows = payload?.rows ?? [];
+  const fields = payload?.fields ?? [];
+  const searchedRows = useMemo(() => {
+    const normalized = search.trim().toLowerCase();
+    return rows.filter((row) => {
+      if (!normalized) return true;
+      const value = fieldFilter === "all" ? Object.values(row).join(" ") : row[fieldFilter] ?? "";
+      return value.toLowerCase().includes(normalized);
+    });
+  }, [fieldFilter, rows, search]);
+  const selectedRow = searchedRows[selectedIndex] ?? searchedRows[0] ?? null;
+  const breakdownField = datasetKey === "BASS-II" ? "PI" : "Material";
+  const breakdown = getCounts(rows, breakdownField);
+  const breakdownMax = breakdown[0]?.[1] ?? 1;
 
-  const sourceRows = profile.sourceRows;
-  const representative = sourceRows[0];
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [search, fieldFilter, datasetKey]);
 
   return (
-    <div className="lab-app" dir="rtl">
-      <header className="lab-header">
-        <div className="lab-brand"><span className="lab-mark"><Flame size={19} /></span><span><b>Orbital Fire</b><small>Microgravity fire lab</small></span></div>
-        <div className="lab-header-note"><span className="status-pulse" /> تجربة تعليمية من البيانات المرفقة</div>
-      </header>
+    <div className="data-app" dir="rtl">
+      <aside className={`data-sidebar ${mobileOpen ? "open" : ""}`}>
+        <div className="data-brand"><AppMark /><div><strong>Orbital Fire</strong><span>Safety Insights Dashboard</span></div></div>
+        <button className="data-mobile-close" onClick={() => setMobileOpen(false)} aria-label="إغلاق القائمة"><X size={19} /></button>
+        <div className="data-nav-label">DATASETS</div>
+        <nav className="data-nav">
+          {(Object.keys(DATASET_DETAILS) as DatasetKey[]).map((key) => <button key={key} className={datasetKey === key ? "active" : ""} onClick={() => { setDatasetKey(key); setMobileOpen(false); }}><FileSpreadsheet size={17} /><span>{key}</span><small>{payloads[key]?.rows.length ?? "—"}</small></button>)}
+        </nav>
+        <div className="data-sidebar-bottom"><div className="data-nav-label">SOURCE FILE</div><div className="source-file"><Database size={16} /><span>{displaySourceFile(payload?.sourceFile)}</span></div><div className="data-sidebar-note">The values shown here are read from the supplied files.</div></div>
+      </aside>
+      {mobileOpen && <button className="data-scrim" onClick={() => setMobileOpen(false)} aria-label="إغلاق القائمة" />}
 
-      <main className="lab-shell">
-        <section className="lab-intro"><div><span className="lab-kicker">SAFETY INSIGHTS / INTERACTIVE LAB</span><h1>ماذا حدث للعينة<br /><em>عندما تغيّرت البيئة؟</em></h1><p>اختر مادة من نتائج التجارب السابقة، ثم حرّك الأكسجين والمراوح لترى لحظة الاشتعال وما إذا كان اللهب انطفأ أو استمر.</p></div><div className="lab-intro-orbit"><span /><b>LIVE<br />MODEL</b></div></section>
+      <main className="data-main">
+        <header className="data-topbar"><div className="data-topbar-left"><button className="data-mobile-menu" onClick={() => setMobileOpen(true)} aria-label="فتح القائمة"><Menu size={20} /></button><span className="data-breadcrumb">DATA / {datasetKey}</span></div><div className="data-topbar-right"><span className="read-only"><span /> READ ONLY</span><span className="data-top-date">SUPPLIED DATA</span></div></header>
+        <div className="data-content">
+          <section className="data-heading"><div><span className="data-eyebrow">{DATASET_DETAILS[datasetKey].subtitle}</span><h1>{DATASET_DETAILS[datasetKey].title}</h1><p>{DATASET_DETAILS[datasetKey].description}</p></div><div className="dataset-switcher"><label htmlFor="dataset-select">DATASET</label><div><select id="dataset-select" value={datasetKey} onChange={(event) => setDatasetKey(event.target.value as DatasetKey)}>{(Object.keys(DATASET_DETAILS) as DatasetKey[]).map((key) => <option key={key} value={key}>{key}</option>)}</select><ChevronDown size={16} /></div></div></section>
 
-        <section className="material-section"><div className="section-head"><div><span className="lab-kicker">01 / SAMPLE LIBRARY</span><h2>اختر المادة</h2></div><span className="section-hint">{profiles.length} مواد من الملفات المرفقة</span></div><div className="material-grid">{profiles.map((item) => <MaterialCard key={item.id} profile={item} active={item.id === profile.id} onClick={() => { setActiveId(item.id); reset(); }} />)}</div></section>
+          <section className="metric-grid">
+            <Metric icon={<Table2 size={18} />} label="ROWS" value={payload ? String(payload.rows.length) : "—"} detail="records in supplied table" />
+            <Metric icon={<Hash size={18} />} label="FIELDS" value={payload ? String(payload.fields.length) : "—"} detail="columns in supplied table" />
+            <Metric icon={<BarChart3 size={18} />} label={breakdownField.toUpperCase()} value={payload ? String(uniqueValues(rows, breakdownField)) : "—"} detail="unique values in this field" />
+            <Metric icon={<Activity size={18} />} label="DATASET" value={payload ? datasetKey : "—"} detail={displaySourceFile(payload?.sourceFile)} />
+          </section>
 
-        <section className="experiment-layout">
-          <div className="control-column">
-            <div className="section-head compact"><div><span className="lab-kicker">02 / ENVIRONMENT</span><h2>غيّر الظروف</h2></div><button className="reset-button" onClick={reset}>إعادة التجربة</button></div>
-            <div className="control-card">
-              <label className="slider-row"><span className="slider-top"><span><Wind size={16} /> سرعة المراوح <small>FAN SPEED</small></span><b>{fan.toFixed(1)} <i>cm/s</i></b></span><input type="range" min="0" max="25" step="0.1" value={fan} onChange={(event) => setFan(Number(event.target.value))} style={{ "--progress": `${(fan / 25) * 100}%` } as React.CSSProperties} /><span className="slider-meta"><span>0</span><span>نقطة الاشتعال: {profile.fanIgnition} cm/s</span><span>25</span></span></label>
-              <label className="slider-row"><span className="slider-top"><span><Zap size={16} /> نسبة الأكسجين <small>O₂ LEVEL</small></span><b>{oxygen.toFixed(1)} <i>%</i></b></span><input type="range" min="0" max="30" step="0.1" value={oxygen} onChange={(event) => setOxygen(Number(event.target.value))} style={{ "--progress": `${(oxygen / 30) * 100}%` } as React.CSSProperties} /><span className="slider-meta"><span>0%</span><span>نقطة الاشتعال: {profile.o2Ignition}%</span><span>30%</span></span></label>
-              <div className="threshold-callout"><Info size={15} /><span>اسحب كل شريط حتى يصل إلى نقطة الاشتعال، ثم خفّض القيم إلى نقطة الانطفاء لمراقبة التحول.</span></div>
+          <section className="data-workspace">
+            <div className="table-panel">
+              <div className="panel-header"><div><span className="panel-kicker">RAW RECORDS</span><h2>Data table</h2></div><span className="record-count">{searchedRows.length} / {rows.length}</span></div>
+              <div className="table-toolbar"><div className="search-box"><Search size={16} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search supplied values" /></div><div className="field-select"><SlidersHorizontal size={15} /><select value={fieldFilter} onChange={(event) => setFieldFilter(event.target.value)}><option value="all">All fields</option>{fields.map((field) => <option key={field} value={field}>{FIELD_LABELS[field] ?? field}</option>)}</select><ChevronDown size={14} /></div></div>
+              <div className="table-scroll"><table><thead><tr><th>#</th>{fields.map((field) => <th key={field}>{FIELD_LABELS[field] ?? field}</th>)}</tr></thead><tbody>{loading ? <tr><td colSpan={fields.length + 1} className="empty-cell">Loading supplied data…</td></tr> : searchedRows.length === 0 ? <tr><td colSpan={fields.length + 1} className="empty-cell">No matching supplied values.</td></tr> : searchedRows.slice(0, 70).map((row, index) => <tr key={`${datasetKey}-${index}`} className={row === selectedRow ? "selected-row" : ""} onClick={() => setSelectedIndex(index)}><td>{index + 1}</td>{fields.map((field) => <td key={field} title={displayValue(row[field])}>{displayValue(row[field])}</td>)}</tr>)}</tbody></table></div>
+              {searchedRows.length > 70 && <div className="table-note">Showing the first 70 matching records from the supplied file.</div>}
             </div>
-            <div className="source-mini"><span>السجل المستخدم</span><b>{profile.name}</b><small>{sourceRows.length ? `${sourceRows.length} سجلات مرتبطة من الملف` : "بيانات الملخص المرفق"}</small></div>
-          </div>
 
-          <div className="visual-column">
-            <div className="visual-card"><div className="visual-card-head"><div><span className="lab-kicker">03 / OBSERVATION</span><h2>سلوك اللهب</h2></div><span className="live-tag"><span /> {reading.statusText}</span></div><div className="flame-stage" style={{ "--flame-color": reading.statusColor } as React.CSSProperties}><div className="stage-ring ring-a" /><div className="stage-ring ring-b" /><div className={`flame-icon ${reading.status === "idle" ? "idle" : ""}`} style={{ opacity: 0.22 + reading.intensity * 0.78 }}><Flame size={92} fill="currentColor" /></div><div className="stage-readout"><strong>{reading.status === "persistent" ? "∞" : Math.round(reading.intensity * 100)}</strong><small>FLAME INDEX</small></div></div><FlameChart intensity={reading.intensity} color={reading.statusColor} /><div className="state-bar"><span className="state-dot" style={{ background: reading.statusColor }} /><b>{reading.statusText}</b><span>{reading.status === "persistent" ? "لا توجد نقطة انطفاء في السجل" : reading.status === "protected" ? "Nomex يحافظ على حالته العازلة" : reading.status === "out" ? "انخفضت الشدة بعد الوصول لقيم الإطفاء" : reading.hasIgnited ? "القيم الحالية تدعم استمرار اللهب" : "حرّك الشرائط للوصول إلى الاشتعال"}</span></div></div>
-          </div>
-        </section>
+            <aside className="detail-panel"><div className="panel-header"><div><span className="panel-kicker">SELECTED RECORD</span><h2>{selectedRow ? displayValue(selectedRow[fields[0]]) : "—"}</h2></div><span className="detail-index">{selectedRow ? `${searchedRows.indexOf(selectedRow) + 1} / ${searchedRows.length}` : "—"}</span></div><div className="detail-list">{selectedRow && fields.map((field) => <div className="detail-row" key={field}><span>{FIELD_LABELS[field] ?? field}</span><strong>{displayValue(selectedRow[field])}</strong></div>)}</div><div className="detail-foot"><ArrowDownLeft size={14} /><span>Values are displayed as supplied.</span></div></aside>
+          </section>
 
-        <section className="evidence-grid"><article className="note-card"><span className="lab-kicker">NASA NOTE / READING</span><h2>{profile.shortName}</h2><p>{profile.nasaNote}</p><div className="note-source"><Info size={14} /> قراءة تفسيرية مبنية على السجلات والملخص المرفق</div></article><article className="facts-card"><div className="section-head compact"><div><span className="lab-kicker">RECORDED VALUES</span><h2>ما الذي سُجّل؟</h2></div><Gauge size={18} /></div><div className="facts-list"><div><span>الأكسجين الابتدائي</span><b>{representative?.["Percent O2 (Note 1)"] ?? `${profile.o2Ignition}%`}</b></div><div><span>تدفق الهواء</span><b>{representative?.["Air Flow (cm/s)"] ?? `${profile.fanIgnition} cm/s`}</b></div><div><span>زمن الاحتراق</span><b>{representative?.["Burn Time (s)"] ?? (profile.mode === "persistent" ? "نشط" : "—")}</b></div><div><span>عدد السجلات المرتبطة</span><b>{sourceRows.length || "—"}</b></div></div></article></section>
+          <section className="breakdown-panel"><div className="panel-header"><div><span className="panel-kicker">FIELD DISTRIBUTION</span><h2>{breakdownField}</h2></div><span className="distribution-note">derived from supplied rows</span></div><div className="distribution-list">{breakdown.slice(0, 8).map(([name, count]) => <div className="distribution-row" key={name}><span className="distribution-name" title={name}>{name}</span><div className="distribution-track"><span style={{ width: `${(count / breakdownMax) * 100}%` }} /></div><strong>{count}</strong></div>)}</div></section>
 
-        <footer className="lab-footer"><span>ORBITAL FIRE / SAFETY INSIGHTS</span><span>القيم المعروضة مأخوذة من الملفات المرفقة — وليست قراءة حساسات حية</span></footer>
+          <footer className="data-footer"><span>{displaySourceFile(payload?.sourceFile)}</span><span>NO SYNTHETIC VALUES · READ ONLY VIEW</span></footer>
+        </div>
       </main>
     </div>
   );
