@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import bassII from "../data/bass-ii";
 import saffire2 from "../data/saffire-2";
+import InteractiveLab from "./InteractiveLab";
 
 type DataRow = Record<string, string | null>;
 type DatasetPayload = {
@@ -126,6 +127,7 @@ export default function Home() {
   const [fieldFilter, setFieldFilter] = useState("all");
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [showLab, setShowLab] = useState(false);
 
   const payload = payloads[datasetKey];
   const rows = payload?.rows ?? [];
@@ -147,6 +149,8 @@ export default function Home() {
     setSelectedIndex(0);
   }, [search, fieldFilter, datasetKey]);
 
+  if (showLab) return <InteractiveLab onBack={() => setShowLab(false)} />;
+
   return (
     <div className="data-app" dir="rtl">
       <aside className={`data-sidebar ${mobileOpen ? "open" : ""}`}>
@@ -154,7 +158,7 @@ export default function Home() {
         <button className="data-mobile-close" onClick={() => setMobileOpen(false)} aria-label="إغلاق القائمة"><X size={19} /></button>
         <div className="data-nav-label">DATASETS</div>
         <nav className="data-nav">
-          {(Object.keys(DATASET_DETAILS) as DatasetKey[]).map((key) => <button key={key} className={datasetKey === key ? "active" : ""} onClick={() => { setDatasetKey(key); setMobileOpen(false); }}><FileSpreadsheet size={17} /><span>{key}</span><small>{payloads[key]?.rows.length ?? "—"}</small></button>)}
+          {(Object.keys(DATASET_DETAILS) as DatasetKey[]).map((key) => <div key={key} className="data-nav-group"><button className={datasetKey === key && !showLab ? "active" : ""} onClick={() => { setDatasetKey(key); setShowLab(false); setMobileOpen(false); }}><FileSpreadsheet size={17} /><span>{key}</span><small>{payloads[key]?.rows.length ?? "—"}</small></button>{key === "SAFFIRE-2" && <button className={`data-subnav ${showLab ? "active" : ""}`} onClick={() => { setShowLab(true); setMobileOpen(false); }}><Flame size={14} /><span>Interactive fire lab</span></button>}</div>)}
         </nav>
         <div className="data-sidebar-bottom"><div className="data-nav-label">SOURCE FILE</div><div className="source-file"><Database size={16} /><span>{displaySourceFile(payload?.sourceFile)}</span></div><div className="data-sidebar-note">The values shown here are read from the supplied files.</div></div>
       </aside>
